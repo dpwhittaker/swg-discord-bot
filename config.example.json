@@ -1,0 +1,18 @@
+{
+    "SWG": {
+        "LoginAddress": "my.server.com",
+        "LoginPort": 44453,
+        "Username": "SWGAccount",
+        "Password": "SWGPassword",
+        "Character": "Discord",
+        "ChatRoom": "Genchat"
+    },
+    "Discord": {
+        "BotName": "RoC-Bot",
+        "BotToken": "<Bot-token-from-discordapp.com/developers>",
+        "ServerName": "SWG Awesomeness",
+        "ChatChannel": "general",
+        "NotificationChannel": "admin-lounge",
+        "NotificationMentionRole": "Staff"
+    }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "swg-discord-bot",
+  "version": "1.0.0",
+  "description": "transfer chat messages from discord to SWG and back",
+  "main": "discordbot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "CC0-1.0",
+  "dependencies": {
+    "discord.js": "^11.1.0"
+  }
+}
