@@ -146,7 +146,7 @@ setInterval(() => {
 setInterval(() => {
     if (!server.PingPort || !module.exports.isConnected) return;
     var buf = new Buffer(4);
-    buf.writeUInt32LE(new Date().getTime() & 0xFFFFFFFF);
+    buf.writeUInt32LE((new Date().getTime() & 0xFFFFFFFF) >>> 0);
     socket.send(buf, server.PingPort, server.Address);
 }, 1000);
 
