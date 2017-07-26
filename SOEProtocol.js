@@ -43,7 +43,7 @@ var DecodeSOEPacket = module.exports.Decode = function (buf, decrypted) {
     }
     else if (SOEHeader == 0x9) {
         var sequence = buf.readUInt16BE(2);
-        if (sequence <= session.lastSequence) return [];
+        if (sequence <= session.lastSequence && !module.exports.analyze) return [];
         session.lastSequence = sequence;
         var operands = buf.readUInt16LE(4);
         var opcode;
@@ -221,7 +221,7 @@ DecodeSWGPacket[0x789a4e0a] = function(data) {
     return {type: "GameServerLagResponse"};
 }
 DecodeSWGPacket[0xe00730e5] = function(data) {
-    return {type: "ClientPermissionsMessage",
+    return {type: "ClientPermissions",
         GalaxyOpenFlag: data.readUInt8(0),
         CharacterSlotOpenFlag: data.readUInt8(1),
         UnlimitedCharCreationFlag: data.readUInt8(2)
@@ -408,9 +408,9 @@ EncodeSWGPacket["ChatSendToRoom"] = function(data) {
 
 DecodeSWGPacket[0xcd4ce444] = function(data) {
     data.off = 0;
+    AString(data);//SWG
+    AString(data);//server
     var ret = {type: "ChatRoomMessage",
-        GameName: AString(data),
-        GalaxyName: AString(data),
         CharacterName: AString(data),
         RoomID: data.readUInt32LE(data.off)
     };
@@ -420,7 +420,7 @@ DecodeSWGPacket[0xcd4ce444] = function(data) {
     return ret;
 }
 DecodeSWGPacket[0xe7b61633] = function(data) {
-    return {type: "ChatOnSendRoomMessage",
+    return {type: "ChatOnSendRoom",
         ErrorCode: data.readUInt32LE(0),
         MessageID: data.readUInt32LE(4)
     }
@@ -555,7 +555,102 @@ DecodeSWGPacket[0x70deb197] = function(data) {
 }
 
 DecodeSWGPacket[0x80ce5e46] = function(data) {
-    return {type:"ObjectControllerMessage", TO:"DO"}
+    return {type:"ObjectController", TODO: "Main event for interacting with world"}
+}
+
+DecodeSWGPacket[0xf898e25f] = function(data) {
+    data.off = 0;
+    return {type:"RequestCategories", Language: AString(data)}
+}
+
+DecodeSWGPacket[0x274f4e78] = function(data) {
+    return {type:"NewTicketActivity", TicketID: data.readUInt32LE(0)}
+}
+
+DecodeSWGPacket[0x0f5d5325] = function(data) {
+    return {type:"ClientInactivity", Flag: data.readUInt8(0)}
+}
+
+DecodeSWGPacket[0x4c3d2cfa] = function(data) {
+    return {type:"ChatRequestRoomList"}
+}
+
+EncodeSWGPacket["ChatRequestRoomList"] = function(data) {
+    return Encrypt(EncodeSOEHeader(0x4c3d2cfa, 1));
+}
+
+DecodeSWGPacket[0x2e365218] = function(data) {
+    return {type:"ConnectPlayer"}
+}
+
+DecodeSWGPacket[0x35366bed] = function(data) {
+    data.off = 4;
+    return {type:"ChatCreateRoom",
+        PermissionFlag: data.readUInt8(0),
+        ModerationFlag: data.readUInt8(1),
+        RoomPath: AString(data),
+        RoomTitle: AString(data),
+        RequestID: data.readUInt32LE(data.off)
+    }
+}
+EncodeSWGPacket["ChatCreateRoom"] = function(data) {
+    var header = EncodeSOEHeader(0x35366bed, 7);
+    var buf = new Buffer(496);
+    buf.writeUInt8(1, 0);
+    buf.writeUInt8(0, 1);
+    buf.off = 4;
+    writeAString(buf, data.RoomPath);
+    writeAString(buf, data.RoomTitle || "");
+    buf.writeUInt32LE(session.RequestID++, buf.off);
+    buf = Buffer.concat([header, buf.slice(0, buf.off+4)]);
+    return Encrypt(buf);
+
+}
+DecodeSWGPacket[0x60b5098b] = function(data) {
+    data.off = 0;
+    AString(data); //SWG
+    AString(data); //server
+    return {type:"ChatOnLeaveRoom", PlayerName: AString(data), RoomID: data.readUInt32LE(data.off+4)}
+}
+
+DecodeSWGPacket[0x6137556f] = function(data) {
+    return {type:"ConnectPlayerResponse"};
+}
+
+DecodeSWGPacket[0x35d7cc9f] = function(data) {
+    var ret = {type: "ChatOnCreateRoom",
+        Error: data.readUInt32LE(0),
+        RoomID: data.readUInt32LE(4),
+        IsPublic: !!data.readUInt32LE(8),
+        IsModerated: !!data.readUInt8(12),
+        Moderators: [],
+        Users: []
+    };
+    data.off = 13;
+    ret.RoomPath = AString(data);
+    AString(data); //SWG
+    AString(data); //server
+    ret.Owner = AString(data);
+    AString(data); //SWG
+    AString(data); //server
+    ret.Creator = AString(data);
+    ret.Title = UString(data);
+    var moderators = data.readUInt32LE(data.off);
+    data.off += 4;
+    for (var i = 0; i < moderators; i++) {
+        AString(data); //SWG
+        AString(data); //server
+        ret.Moderators.push(AString(data));
+    }
+    var users = data.readUInt32LE(data.off);
+    data.off += 4;
+    for (var i = 0; i < users; i++) {
+        AString(data); //SWG
+        AString(data); //server
+        ret.Users.push(AString(data));
+    }
+    ret.RequestID = data.readUInt32LE(data.off);
+    return ret;
 }
 
 function AString(buf) {

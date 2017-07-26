@@ -73,12 +73,12 @@ handlePacket["EnumerateCharacterId"] = function(packet) {
     server.ServerName = server.ServerNames[character.ServerID].Name;
     send("SessionRequest");
 }
-handlePacket["ClientPermissionsMessage"] = function(packet) {
+handlePacket["ClientPermissions"] = function(packet) {
     send("SelectCharacter", {CharacterID: server.CharacterID});
     setTimeout(() => {
-        var timeSinceLastPacket = new Date() - lastMessageTime;
-        send("CmdSceneReady");
-    }, 2000);
+        send("ChatCreateRoom", {RoomPath: `SWG.${server.ServerName}.${server.ChatRoom}`})
+        setTimeout(() => send("CmdSceneReady"), 1000);
+    }, 1000);
 }
 handlePacket["ChatRoomList"] = function(packet) {
     //console.log(JSON.stringify(packet, null, 2));
