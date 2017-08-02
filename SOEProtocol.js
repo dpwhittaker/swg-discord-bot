@@ -349,7 +349,9 @@ DecodeSWGPacket[0x65ea4574] = function(data) {
     data.off = 4;
     for (var i = 0; i < characterCount; i++) {
         var name = UString(data);
-        var raceGender = raceGenderLookup[data.readUInt32LE(data.off)].split(" ");
+        var raceGender = raceGenderLookup[data.readUInt32LE(data.off)];
+        if (!raceGender) raceGender = "unknown unknown";
+        raceGender = raceGender.split(" ");
         ret.Characters[name] = {
             Name: name,
             Race: raceGender[0],
