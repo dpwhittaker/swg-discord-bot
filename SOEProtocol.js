@@ -10,6 +10,7 @@ var DecodeSOEPacket = module.exports.Decode = function (buf, decrypted) {
     if (SOEHeader > 0x2 && !decrypted) buf = Decrypt(buf);
     var len, opcode;
     console.log(buf.toString('hex'));
+    console.log(buf.toString('ascii').replace(/[^A-Za-z0-9!"#$%&'()*+,.\/:;<=>?@\[\] ^_`{|}~-]/g, ' ').split('').join(' '));
     if (SOEHeader == 0x1) {
         return [{type: "SessionRequest",
             CRCLength: buf.readUInt32BE(2),
@@ -125,13 +126,30 @@ function Decrypt(bufData)
     }
 
     decrypted.writeUInt16BE(bufData.readUInt16BE(offset), offset);
-    console.log(decrypted.toString('hex'));
+    //console.log(decrypted.toString('hex'));
     if (decrypted.readUInt8(decrypted.length-3) == 1)
         return Buffer.concat([decrypted.slice(0,2), zlib.inflateSync(decrypted.slice(2, -3)), decrypted.slice(-3)]);
     return decrypted;
 }
 
 function Encrypt(bufData) {
+    if (bufData.length > 493) {
+        var packets = [];
+        //console.log(buf.toString('hex'));
+        //console.log(buf.toString('utf16le'));
+        var swgPacketSize = 496 - 8 - 3;
+        for (var i = 4; i < bufData.length; i += swgPacketSize) {
+            var head = new Buffer(i == 4 ? 8 : 4);
+            head.writeUInt16BE(0xd, 0);
+            head.writeUInt16BE(i > 4 ? session.sequence++ : session.sequence-1, 2);
+            if (i == 4) head.writeUInt32BE(bufData.length-4, 4);
+            else swgPacketSize = 496 - 4 - 3;
+            var b = Buffer.concat([head, bufData.slice(i, i+swgPacketSize)]);
+            //console.log(b.toString('hex'));
+            packets.push(Encrypt(b));
+        }
+        return packets;
+    }
     if (bufData.length > 100 || bufData.readUInt16BE(0) == 0xd)
         bufData = Buffer.concat([bufData.slice(0,2), zlib.deflateSync(bufData.slice(2)), Buffer.from([1,0,0])]);
     else
@@ -376,36 +394,43 @@ DecodeSWGPacket[0x20e4dbe3] = function(data) {
 }
 messageCounter = 1;
 EncodeSWGPacket["ChatSendToRoom"] = function(data) {
-    var buf = new Buffer(data.Message.length * 2 + 16);
-    buf.off = 0;
+    var buf = Buffer.concat([EncodeSOEHeader(0x20e4dbe3, 5), new Buffer(data.Message.length * 2 + 16)]);
+    buf.off = 10;
     writeUString(buf, data.Message);
     buf.fill(0, buf.off, buf.off+4);
     buf.writeUInt32LE(data.RoomID, buf.off+4);
     buf.writeUInt32LE(messageCounter++, buf.off+8);
-    if (buf.length < 496) {
-        var header = EncodeSOEHeader(0x20e4dbe3, 5);
-        buf = Buffer.concat([header, buf]);
-        //console.log(buf.toString('hex'));
-        return Encrypt(buf);
-    }
-    var packets = [];
-    buf = Buffer.concat([new Buffer(6), buf]);
-    buf.writeUInt16LE(5, 0);
-    buf.writeUInt32LE(0x20e4dbe3, 2);
     //console.log(buf.toString('hex'));
-    //console.log(buf.toString('utf16le'));
-    var swgPacketSize = 496 - 8 - 3;
-    for (var i = 0; i < buf.length; i += swgPacketSize) {
-        var head = new Buffer(i == 0 ? 8 : 4);
-        head.writeUInt16BE(0xd, 0);
-        head.writeUInt16BE(session.sequence++, 2);
-        if (i == 0) head.writeUInt32BE(buf.length, 4);
-        else swgPacketSize = 496 - 4 - 3;
-        var b = Buffer.concat([head, buf.slice(i, i+swgPacketSize)]);
-        console.log(b.toString('hex'));
-        packets.push(Encrypt(b));
-    }
-    return packets;
+    return Encrypt(buf);
+}
+
+tellCounter = 1;
+EncodeSWGPacket["ChatInstantMessageToCharacter"] = function(data) {
+    var buf = Buffer.concat([EncodeSOEHeader(0x84bb21f7, 5), new Buffer(21 + data.ServerName.length + data.PlayerName.length + data.Message.length * 2)]);
+    buf.off = 10;
+    writeAString(buf, "SWG");
+    writeAString(buf, data.ServerName);
+    writeAString(buf, data.PlayerName);
+    writeUString(buf, data.Message);
+    buf.fill(0, buf.off, buf.off+4);
+    buf.writeUInt32LE(tellCounter++, buf.off+4);
+    //console.log(buf.toString('hex'));
+    return Encrypt(buf);
+}
+
+DecodeSWGPacket[0x88dbb381] = function(data) {
+    var errorCode = data.readUInt32LE(0);
+    var status = "Error";
+    if (errorCode == 0) status = "Success";
+    if (errorCode == 4) status = "Unavailable";
+    return {type:"ChatOnSendInstantMessage", Status: status};
+}
+
+DecodeSWGPacket[0x3c565ced] = function(data) {
+    data.off = 0;
+    AString(data);//SWG
+    AString(data);//server
+    return {type:"ChatInstantMessageToClient", PlayerName: AString(data), Message: UString(data)};
 }
 
 DecodeSWGPacket[0xcd4ce444] = function(data) {
@@ -551,6 +576,22 @@ DecodeSWGPacket[0x70deb197] = function(data) {
         AString(data); //galaxy
         room.Creator = AString(data);
         room.Title = UString(data);
+        var moderators = data.readUInt32LE(data.off);
+        data.off += 4;
+        room.Moderators = [];
+        for (var m = 0; m < moderators; m++) {
+            AString(data);//SWG
+            AString(data);//galaxy
+            room.Moderators.push(AString(data));
+        }
+        var users = data.readUInt32LE(data.off);
+        data.off += 4;
+        room.Users = [];
+        for (var u = 0; u < users; u++) {
+            AString(data);//SWG
+            AString(data);//galaxy
+            room.Users.push(AString(data));
+        }
         ret.Rooms[room.RoomID] = room;
     }
     return ret;
