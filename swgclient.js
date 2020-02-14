@@ -168,6 +168,7 @@ setInterval(() => {
     socket.send(buf, server.PingPort, server.Address);
 }, 1000);
 
-
-
-
+setInterval(() => {
+    if (!module.exports.isConnected) return;
+	send("NetStatusRequest");
+}, 40000);

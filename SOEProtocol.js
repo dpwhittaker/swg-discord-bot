@@ -196,6 +196,13 @@ EncodeSWGPacket["Ack"] = function(data) {
     return Encrypt(buf);
 }
 
+EncodeSWGPacket["NetStatusRequest"] = function(data) {
+    var buf = new Buffer(4);
+    buf.writeUInt16BE(0x7, 0);
+    buf.writeUInt16BE(0, 2);
+    return Encrypt(buf);
+}
+
 EncodeSWGPacket["SessionRequest"] = function() {
     var buf = new Buffer(14);
     buf.writeUInt16BE(1, 0);
